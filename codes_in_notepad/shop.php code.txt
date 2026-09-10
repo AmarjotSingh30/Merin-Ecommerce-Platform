@@ -1,0 +1,984 @@
+<!-- Data Fetch part -->
+
+<?php
+$connection = new mysqli("localhost", "root", "", "cozastore");
+
+if($connection->connect_error){
+    die("DB Connection Failed");
+}
+
+// ---------- PAGINATION SETUP ----------
+$limit = 9; 
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+
+// ⭐ SEARCH PARAM
+$search = isset($_GET['search']) ? $_GET['search'] : '';
+$searchSQL = "";
+
+if (!empty($search)) {
+    $searchSafe = $connection->real_escape_string($search);
+    $searchSQL = " AND (name LIKE '%$searchSafe%' OR  `desc` LIKE '%$searchSafe%')";
+}
+
+// ⭐ COUNT TOTAL PRODUCTS WITH SEARCH APPLIED
+$countQuery = $connection->query("
+    SELECT COUNT(*) AS total 
+    FROM product 
+    WHERE is_deleted = 0
+    $searchSQL
+");
+// $totalRow = $countQuery->fetch_assoc();
+if (!$countQuery) {
+    die("SQL Error: " . $connection->error);
+}
+
+$totalRow = $countQuery->fetch_assoc();
+$total = (int)$totalRow['total'];
+
+
+
+// CALCULATE TOTAL PAGES
+$pages = (int) ceil($total / $limit);
+if ($pages < 1) $pages = 1;
+
+// VALIDATE PAGE RANGE
+if ($page < 1) $page = 1;
+if ($page > $pages) $page = $pages;
+
+// OFFSET
+$start = ($page - 1) * $limit;
+
+
+
+// ranges
+$start_show = ($total == 0) ? 0 : $start + 1;
+$end_show = min($start + $limit, $total);
+
+// categories
+$categories = $connection->query("
+    SELECT c.category_id, c.category_name, 
+    (SELECT COUNT(*) FROM product p 
+     WHERE p.category_id = c.category_id AND p.is_deleted = 0) AS total_products
+    FROM category c
+");
+
+// $categories = $connection->query("SELECT * FROM category WHERE is_deleted=0");
+
+// min/max price
+$priceQuery = $connection->query("SELECT MIN(price) AS min_price, MAX(price) AS max_price FROM product");
+$priceData = $priceQuery->fetch_assoc();
+
+// sort
+$sort = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
+
+$orderBy = "created_at DESC";
+
+switch($sort){
+    case 'low':
+        $orderBy = "CAST(price AS UNSIGNED) ASC";
+        break;
+    case 'high':
+        $orderBy = "CAST(price AS UNSIGNED) DESC";
+        break;
+    case 'newest':
+        $orderBy = "created_at DESC";
+        break;
+}
+
+// ⭐ FINAL PRODUCT QUERY (with search + sorting + pagination)
+$products = $connection->query("
+    SELECT * FROM product 
+    WHERE is_deleted = 0
+    $searchSQL
+    ORDER BY $orderBy 
+    LIMIT $start, $limit
+");
+
+// brand filter
+$brandQuery = "SELECT * FROM brands ORDER BY brand_name ASC";
+$brands = $connection->query($brandQuery);
+
+// price filter
+// Ensure $priceData exists (you already run the MIN/MAX query earlier)
+if (!isset($priceData) || !is_array($priceData)) {
+    // fallback safe defaults if price query failed
+    $priceData = ['min_price' => 0, 'max_price' => 0];
+}
+
+// Initialize category (safe default 0 = all)
+$category = isset($_GET['category']) ? (int)$_GET['category'] : 0;
+
+// Initialize price bounds from GET (or fallback to db values)
+$minPrice = isset($_GET['min_price']) ? (int)$_GET['min_price'] : (int)$priceData['min_price'];
+$maxPrice = isset($_GET['max_price']) ? (int)$_GET['max_price'] : (int)$priceData['max_price'];
+
+// Extra safety: ensure min <= max
+if ($minPrice > $maxPrice) {
+    // swap to keep logic consistent
+    $tmp = $minPrice;
+    $minPrice = $maxPrice;
+    $maxPrice = $tmp;
+}
+
+$priceQuery = $connection->query("SELECT MIN(price) AS min_price, MAX(price) AS max_price FROM product WHERE is_deleted = 0");
+$priceData = $priceQuery->fetch_assoc();
+
+
+
+// -------------------------
+// SIZE FILTER LOGIC (FINAL)
+// -------------------------
+
+$size = isset($_GET['size']) ? $_GET['size'] : [];
+$filterSQL = ""; // initialize filter string
+
+if (!empty($size)) {
+    $sizeSafe = array_map(fn($s) => $connection->real_escape_string($s), $size);
+
+    $filterSQL .= " AND p.product_id IN (
+        SELECT product_id FROM (
+            SELECT product_id, 'S' AS sz FROM size WHERE S != '0'
+            UNION ALL
+            SELECT product_id, 'M' AS sz FROM size WHERE M != '0'
+            UNION ALL
+            SELECT product_id, 'L' AS sz FROM size WHERE L != '0'
+            UNION ALL
+            SELECT product_id, 'XL' AS sz FROM size WHERE XL != '0'
+            UNION ALL
+            SELECT product_id, 'XXL' AS sz FROM size WHERE XXL != '0'
+        ) AS sizeData
+        WHERE sz IN ('" . implode("','", $sizeSafe) . "')
+    )";
+}
+
+// -------------------------
+// TAG FILTER (WORKING PERFECTLY)
+// -------------------------
+if (!empty($_GET['tags']) && is_array($_GET['tags'])) {
+    $tags = array_map('intval', $_GET['tags']);  // ensure integer safety
+    $tagList = implode(",", $tags);
+
+    // Append to the main filter string
+    $filterSQL .= "
+        AND p.product_id IN (
+            SELECT DISTINCT product_id
+            FROM product_tags
+            WHERE tag_id IN ($tagList)
+        )
+    ";
+}
+
+// -------------------------
+// COUNT TOTAL WITH FILTERS
+// -------------------------
+$countFinal = $connection->query("
+    SELECT COUNT(*) AS total
+    FROM product p
+    WHERE p.is_deleted = 0
+    $searchSQL
+    $filterSQL
+");
+
+if (!$countFinal) {
+    die("Filtered COUNT Error: " . $connection->error);
+}
+
+$total = (int)$countFinal->fetch_assoc()['total'];
+
+// -------------------------
+// PAGINATION FIX
+// -------------------------
+$pages = max(1, ceil($total / $limit));
+
+if ($page < 1) $page = 1;
+if ($page > $pages) $page = $pages;
+
+$start = ($page - 1) * $limit;
+
+// -------------------------
+// SHOWING RANGE FIX
+// -------------------------
+$start_show = ($total == 0) ? 0 : $start + 1;
+$end_show = min($start + $limit, $total);
+
+// -------------------------
+// FINAL PRODUCT QUERY WITH FILTERS
+// -------------------------
+$products = $connection->query("
+    SELECT p.*
+    FROM product p
+    WHERE p.is_deleted = 0
+    $searchSQL
+    $filterSQL
+    ORDER BY $orderBy
+    LIMIT $start, $limit
+");
+
+?>
+
+<!-- Data Fetch part -->
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>shop_page</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="responsive.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <div class="shop-main">
+        
+         <!-- box 1 -->
+        <!-- Top Info Bar -->
+            <div class="top-bar">
+                <div class="top-left">
+                    <p>Free shipping, 30-day return or refund guarantee.</p>
+                </div>
+
+                <div class="top-right">
+                    <a href="#">Gift Card</a>
+                    <a href="#">Track Order</a>
+                    <a href="#">Contact Us</a>
+                </div>
+            </div>
+
+        <!-- box 1 -->
+
+         <!-- navbar -->
+        <nav class="navbar">
+            <div class="logo">
+                <img src="images/logo.png" alt="logo">
+            </div>
+
+                        <!-- links -->
+                        <div class="nav-links" id="navLinks">
+                            <ul>
+                                <li><a href="#">HOME</a></li>
+                                <li><a href="shop.html">SHOP</a></li>
+                                <li><a href="#">BLOG</a></li>
+                                <li><a href="#">PAGES</a></li>
+                                <li><a href="#">CONTACT</a></li>
+                            </ul>
+                        </div>
+
+                        <!-- icons -->
+                        <div class="icons">
+                            <i class="fa-solid fa-magnifying-glass" id="icon_1"></i>
+                            <i class="fa-solid fa-cart-shopping" id="icon_1"></i>
+                            <i class="fa-regular fa-user" id="icon_1"></i>
+
+                            <!-- hamburger -->
+                            <div class="hamburger" id="hamburger">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    </nav>
+                    <!-- navbar -->   
+                <!-- javascript -->
+                <script>
+                    const hamburger = document.getElementById("hamburger");
+                    const navLinks = document.getElementById("navLinks");
+
+                    hamburger.addEventListener("click", () => {
+                        navLinks.classList.toggle("active");
+                    });
+                </script>
+                <!-- javascript -->
+
+        <!-- navbar -->
+
+
+<!-- shop box1 -->
+      <div class="shop-box1">
+    
+    <!-- Category Tag -->
+    <span class="shop-tag">Category: All Products</span>
+
+    <!-- Main Title -->
+    <h4 class="shop-title">Shop</h4>
+
+    <!-- Trust Indicator -->
+    <div class="shop-trust">
+        <i class="fa-solid fa-shield-check"></i> 100% Genuine Products
+    </div>
+
+    <!-- Breadcrumb -->
+    <p class="shop-breadcrumb">
+        <a href="index.php">Home</a> 
+        <i class="fa-solid fa-angle-right"></i> 
+        <span>Shop</span>
+    </p>
+
+    <!-- Offer Banner -->
+    <div class="shop-offer-banner">
+        🔥 This Week: Extra 15% OFF on selected items
+    </div>
+
+</div>
+<!-- shop box1 -->
+
+
+
+
+  <!-- SHOP SECTION -->
+<div class="shop-wrapper">
+
+   <div class="sidebar">
+
+    <div class="sidebar-box">
+
+    <!-- Search -->
+        <form method="GET" id="searchForm">
+            <div class="search-box">
+                <input type="text" 
+                    name="search" 
+                    placeholder="Search product..." 
+                    value="<?= isset($_GET['search']) ? htmlspecialchars($_GET['search']) : '' ?>">
+                <button type="submit"><i class="fa-solid fa-magnifying-glass"></i></button>
+                <input type="hidden" name="sort" value="<?= $sort ?>">
+            </div>
+        </form>
+    </div>
+    <!-- Search end -->
+
+    <!-- CATEGORY DROPDOWN START  -->
+    <div class="dropdown-item">
+        <div class="dropdown-header">
+            <h4>Categories</h4>
+            <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="dropdown-content">
+            <ul>
+                <?php while($cat = $categories->fetch_assoc()){ ?>
+    <li>
+         <a href="shop.php?category=<?= $cat['category_id'] ?>">
+            <?= $cat['category_name'] ?> (<?= $cat['total_products'] ?>)
+        </a>
+    </li>
+<?php } ?>
+                
+            </ul>
+        </div>
+    </div>
+    <!-- CATEGORY DROPDOWN END  -->
+
+
+    <!-- brand category  -->
+    <form method="GET">
+
+    <!-- BRAND FILTER -->
+    <div class="dropdown-item">
+        <div class="dropdown-header">
+            <h4>Brand</h4>
+            <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="dropdown-content">
+            <ul>
+                <?php while($b = $brands->fetch_assoc()){ ?>
+                    <li>
+                        <label>
+                            <input 
+                                type="checkbox" 
+                                name="brand[]" 
+                                value="<?= $b['brand_id'] ?>"
+                                <?= (isset($_GET['brand']) && in_array($b['brand_id'], $_GET['brand'])) ? 'checked' : '' ?>
+                            >
+                            <?= $b['brand_name'] ?>
+                        </label>
+                    </li>
+                <?php } ?>
+            </ul>
+            <button type="submit" class="filter-btn">Apply Filters</button>
+        </div>
+    </div>
+
+    
+
+</form>
+<!-- brand category end  -->
+
+
+<!-- price category  -->
+   <div class="dropdown-item">
+    <div class="dropdown-header">
+        <h4>Filter Price</h4>
+        <i class="fa-solid fa-chevron-down"></i>
+    </div>
+
+    <div class="dropdown-content">
+
+        <form method="GET" id="priceFilterForm">
+
+            <input 
+                type="range" 
+                name="min_price"
+                min="<?= $priceData['min_price'] ?>" 
+                max="<?= $priceData['max_price'] ?>" 
+                value="<?= $minPrice ?>" 
+                oninput="document.getElementById('minPrice').innerText = this.value;"
+            >
+
+            <input 
+                type="range" 
+                name="max_price"
+                min="<?= $priceData['min_price'] ?>" 
+                max="<?= $priceData['max_price'] ?>" 
+                value="<?= $maxPrice ?>" 
+                oninput="document.getElementById('maxPrice').innerText = this.value;"
+            >
+
+            <p class="price-values">
+                Price: ₹<span id="minPrice"><?= $minPrice ?></span> — ₹<span id="maxPrice"><?= $maxPrice ?></span>
+            </p>
+
+            <!-- KEEP BRAND, CATEGORY, SEARCH VALUES IN FORM -->
+            <?php if (!empty($search)) { ?>
+                <input type="hidden" name="search" value="<?= $search ?>">
+            <?php } ?>
+
+            <?php if ($category > 0) { ?>
+                <input type="hidden" name="category" value="<?= $category ?>">
+            <?php } ?>
+
+            <?php if (!empty($brand)) { 
+                foreach ($brand as $b) { ?>
+                    <input type="hidden" name="brand[]" value="<?= intval($b) ?>">
+            <?php } } ?>
+
+            <button type="submit" class="filter-btn">Apply Filter</button>
+        </form>
+    </div>
+</div>
+<!-- brand category end -->
+ 
+<!-- size dropdown -->
+<div class="dropdown-item">
+    <div class="dropdown-header">
+        <h4>Size</h4>
+        <i class="fa-solid fa-chevron-down"></i>
+    </div>
+
+    <?php
+    // Get one row sample to display size labels
+    $sizeQuery = $connection->query("SELECT S, M, L, XL, XXL FROM size LIMIT 1");
+    $sizes = $sizeQuery->fetch_assoc();
+    $sizeFilter = isset($_GET['size']) ? $_GET['size'] : [];
+    ?>
+
+    <div class="dropdown-content size-options">
+        <?php foreach($sizes as $sizeLabel => $val){ ?>
+            <label style="margin-right:10px; display:inline-block;">
+                <input 
+                    type="checkbox" 
+                    name="size[]" 
+                    value="<?= $sizeLabel ?>"
+                    <?= (in_array($sizeLabel, $sizeFilter)) ? 'checked' : '' ?>
+                >
+                <span><?= $sizeLabel ?></span>
+            </label>
+        <?php } ?>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll("input[name='size[]']").forEach(box => {
+    box.addEventListener("change", () => {
+        const params = new URLSearchParams(window.location.search);
+
+        // Clear old sizes
+        params.delete('size[]');
+
+        // Add selected sizes
+        document.querySelectorAll("input[name='size[]']:checked").forEach(cb => {
+            params.append('size[]', cb.value);
+        });
+
+        window.location.search = params.toString(); // reload page
+    });
+});
+</script>
+
+
+
+
+
+<!-- COLOR CATEGORY -->
+<div class="dropdown-item">
+    <div class="dropdown-header">
+        <h4>Colors</h4>
+        <i class="fa-solid fa-chevron-down"></i>
+    </div>
+
+    <div class="dropdown-content color-options">
+
+        <?php
+        $colorQuery = $connection->query("SELECT red, blue, green, white, black, orange FROM color");
+        $colorData = $colorQuery->fetch_assoc();
+        ?>
+
+        <ul class="color-swatch-list">
+            <?php foreach($colorData as $colorName => $value){ ?>
+                <?php if($value != ""){ ?>
+
+                    <li class="color-swatch-item">
+                        <label class="color-swatch">
+                            <input type="checkbox" name="color[]" value="<?= $colorName ?>">
+                            <span class="swatch-circle" style="background: <?= $colorName ?>;"></span>
+                        </label>
+                    </li>
+
+                <?php } ?>
+            <?php } ?>
+        </ul>
+    </div>
+</div>
+
+
+<script>
+// When user clicks color checkbox → update URL filters
+document.querySelectorAll("input[name='color[]']").forEach(box => {
+    box.addEventListener("change", () => {
+        const params = new URLSearchParams(window.location.search);
+
+        // Remove old color values
+        params.delete('color[]');
+
+        // Add new selected colors
+        document.querySelectorAll("input[name='color[]']:checked").forEach(cb => {
+            params.append('color[]', cb.value);
+        });
+
+        window.location.search = params.toString();
+    });
+});
+</script>
+<!-- color category end -->
+
+
+
+<form id="tagFilterForm" method="GET">
+    <div class="dropdown-item">
+        <div class="dropdown-header">
+            <h4>Tags</h4>
+            <i class="fa-solid fa-chevron-down"></i>
+        </div>
+
+        <div class="dropdown-content tags">
+            <label>
+                <input type="checkbox" name="tags[]" value="1" 
+                <?php if (!empty($_GET['tags']) && in_array(1, $_GET['tags'])) echo "checked"; ?>>
+                Fashion
+            </label>
+
+            <label>
+                <input type="checkbox" name="tags[]" value="2"
+                <?php if (!empty($_GET['tags']) && in_array(2, $_GET['tags'])) echo "checked"; ?>>
+                New
+            </label>
+
+            <label>
+                <input type="checkbox" name="tags[]" value="3"
+                <?php if (!empty($_GET['tags']) && in_array(3, $_GET['tags'])) echo "checked"; ?>>
+                Popular
+            </label>
+
+            <label>
+                <input type="checkbox" name="tags[]" value="4"
+                <?php if (!empty($_GET['tags']) && in_array(4, $_GET['tags'])) echo "checked"; ?>>
+                Sale
+            </label>
+
+            <label>
+                <input type="checkbox" name="tags[]" value="5"
+                <?php if (!empty($_GET['tags']) && in_array(5, $_GET['tags'])) echo "checked"; ?>>
+                Trending
+            </label>
+        </div>
+    </div>
+</form>
+<script>
+document.querySelectorAll('#tagFilterForm input[name="tags[]"]').forEach(tag => {
+    tag.addEventListener('change', () => {
+        document.getElementById("tagFilterForm").submit();
+    });
+});
+</script>
+
+
+
+</div>
+
+<!-- product grid right section -->
+    <!-- RIGHT CONTENT -->
+    <div class="shop-content">
+
+        <!-- Top Bar -->
+        <div class="shop-top">
+            <p>Showing <?= $start_show ?>–<?= $end_show ?> of <?= $total ?> results</p>
+
+            <!-- <p>Showing 1–12 of 126 results</p> -->
+            <!-- <select class="sort-select"> -->
+
+               <form method="GET" id="sortForm">
+                    <select class="sort-select" name="sort" onchange="document.getElementById('sortForm').submit()">
+                        <option value="">Sort by Price</option>
+                        <option value="low" <?= (isset($_GET['sort']) && $_GET['sort']=='low') ? 'selected' : '' ?>>Low to High</option>
+                        <option value="high" <?= (isset($_GET['sort']) && $_GET['sort']=='high') ? 'selected' : '' ?>>High to Low</option>
+                        <option value="newest" <?= (isset($_GET['sort']) && $_GET['sort']=='newest') ? 'selected' : '' ?>>Newest</option>
+                    </select>
+                </form>
+            </select>
+        </div>
+
+
+
+
+<div class="product-grid">
+
+<?php
+$limit = 9;
+$page = isset($_GET['page']) ? $_GET['page'] : 1;
+$start = ($page - 1) * $limit;
+
+// ⭐ FINAL COUNT QUERY (search + all filters)
+$countSQL = "
+    SELECT COUNT(*) AS total
+    FROM product p
+    WHERE p.is_deleted = 0
+    $searchSQL
+    $filterSQL
+";
+
+$countResult = $connection->query($countSQL);
+
+if (!$countResult) {
+    die('COUNT SQL Error: ' . $connection->error);
+}
+
+$total = (int)$countResult->fetch_assoc()['total'];
+
+// ⭐ CALCULATE SHOWING RANGE
+if ($total == 0) {
+    $start_show = 0;
+    $end_show = 0;
+} else {
+    $start_show = $start + 1;
+    $end_show   = min($start + $limit, $total);
+}
+
+
+// SEARCH PARAM
+$search = isset($_GET['search']) ? $_GET['search'] : '';
+$category = isset($_GET['category']) ? (int)$_GET['category'] : 0;
+
+// BRAND PARAM
+$brand = isset($_GET['brand']) ? $_GET['brand'] : [];
+
+// PRICE PARAM
+$minPrice = isset($_GET['min_price']) ? (int)$_GET['min_price'] : $priceData['min_price'];
+$maxPrice = isset($_GET['max_price']) ? (int)$_GET['max_price'] : $priceData['max_price'];
+
+// SIZE PARAM
+$size = isset($_GET['size']) ? $_GET['size'] : [];
+
+// FILTER STRING
+$filterSQL = "";
+
+// CATEGORY FILTER
+if ($category > 0) {
+    $filterSQL .= " AND p.category_id = $category ";
+}
+
+// BRAND FILTER
+if (!empty($brand)) {
+    $brandIDs = array_map('intval', $brand);
+    $brandList = implode(",", $brandIDs);
+    $filterSQL .= " AND p.brand_id IN ($brandList) ";
+}
+
+// SEARCH FILTER
+if (!empty($search)) {
+    $searchSafe = $connection->real_escape_string($search);
+    $filterSQL .= " AND (
+        p.name LIKE '%$searchSafe%' 
+        OR p.`desc` LIKE '%$searchSafe%' 
+        OR EXISTS (
+            SELECT 1 FROM category 
+            WHERE category_id = p.category_id 
+            AND category_name LIKE '%$searchSafe%'
+        )
+    )";
+}
+
+// PRICE FILTER
+$filterSQL .= " AND p.price BETWEEN $minPrice AND $maxPrice ";
+
+// -------------------------
+// SIZE FILTER
+// -------------------------
+if (!empty($size)) {
+    $sizeSafe = array_map(fn($s) => $connection->real_escape_string($s), $size);
+    $filterSQL .= " AND p.product_id IN (
+        SELECT product_id FROM (
+            SELECT product_id, 'S' AS sz FROM size WHERE S != '0'
+            UNION ALL
+            SELECT product_id, 'M' AS sz FROM size WHERE M != '0'
+            UNION ALL
+            SELECT product_id, 'L' AS sz FROM size WHERE L != '0'
+            UNION ALL
+            SELECT product_id, 'XL' AS sz FROM size WHERE XL != '0'
+            UNION ALL
+            SELECT product_id, 'XXL' AS sz FROM size WHERE XXL != '0'
+        ) AS sizeData
+        WHERE sz IN ('" . implode("','", $sizeSafe) . "')
+    )";
+}
+
+// -------------------------
+// COLOR FILTER
+// -------------------------
+$color = isset($_GET['color']) ? $_GET['color'] : [];
+if (!empty($color)) {
+    $conditions = [];
+    foreach ($color as $clr) {
+        $clrSafe = $connection->real_escape_string($clr);
+        $conditions[] = "TRIM(LOWER(color.$clrSafe)) != '' AND TRIM(LOWER(color.$clrSafe)) != '0'";
+    }
+    $finalColorSQL = implode(" OR ", $conditions);
+    $filterSQL .= " AND p.product_id IN (
+        SELECT product_id 
+        FROM color
+        WHERE $finalColorSQL
+    )";
+}
+
+// -------------------------
+// TAG FILTER (WORKING PERFECTLY)
+// -------------------------
+if (!empty($_GET['tags'])) {
+    $tags = array_map('intval', $_GET['tags']);
+    $tagList = implode(",", $tags);
+
+    $filterSQL .= "
+        AND p.product_id IN (
+            SELECT product_id 
+            FROM product_tags 
+            WHERE tag_id IN ($tagList)
+        )
+    ";
+}
+
+// FINAL PRODUCT QUERY
+$productQuery = "
+    SELECT p.* 
+    FROM product p
+    LEFT JOIN category c ON p.category_id = c.category_id
+    WHERE p.is_deleted = 0
+    $filterSQL
+    ORDER BY $orderBy
+    LIMIT $start, $limit
+";
+
+$products = $connection->query($productQuery);
+if (!$products) die('SQL Error: ' . $connection->error);
+
+
+
+// COUNT TOTAL
+
+// ⭐ FINAL COUNT QUERY (SEARCH + FILTERS MUST MATCH PRODUCT QUERY)
+// $countSQL = "
+//     SELECT COUNT(*) AS total
+//     FROM product p
+//     WHERE p.is_deleted = 0
+//     $searchSQL
+//     $filterSQL
+// ";
+
+// $countResult = $connection->query($countSQL);
+
+// if (!$countResult) {
+//     die("COUNT SQL Error: " . $connection->error);
+// }
+
+// $total = (int)$countResult->fetch_assoc()['total'];
+
+// ⭐ SAFE PAGE CALCULATION
+// $pages = max(1, ceil($total / $limit));
+
+// if ($page < 1) $page = 1;
+// if ($page > $pages) $page = $pages;
+
+// ⭐ OFFSET MUST BE AFTER PAGE FIX
+// $start = ($page - 1) * $limit;
+
+// ⭐ SHOWING RANGE
+// if ($total == 0) {
+//     $start_show = 0;
+//     $end_show = 0;
+// } else {
+//     $start_show = $start + 1;
+//     $end_show = min($start + $limit, $total);
+// }
+
+
+
+
+// $countQuery = $connection->query("
+//     SELECT COUNT(*) AS total 
+//     FROM product p
+//     WHERE p.is_deleted = 0
+//     $filterSQL
+// ");
+// $total = $countQuery->fetch_assoc()['total'];
+// $pages = ceil($total / $limit);
+
+
+
+
+?>
+
+<?php 
+if($products->num_rows > 0){
+    while($p = $products->fetch_assoc()){ ?>
+        <div class="product-card">
+            <img src="images/<?= $p['product_image_1'] ?>" alt="">
+            <h5><?= $p['name'] ?></h5>
+            <p class="price">₹<?= $p['price'] ?></p>
+            <a href="product_details.php?id=<?= $p['product_id'] ?>">
+                <button class="add-cart">View Product</button>
+            </a>
+        </div>
+<?php 
+    }
+} else {
+    echo "<p style='padding:20px;'>No products found</p>";
+}
+?>
+
+</div>
+
+<!-- PAGINATION -->
+<div class="pagination-container">
+    <ul class="pagination">
+        <?php 
+            $sizeQueryString = ""; if (!empty($size)) foreach ($size as $s) $sizeQueryString .= "&size[]=" . $s;
+            $brandQueryString = ""; if (!empty($brand)) foreach ($brand as $b) $brandQueryString .= "&brand[]=" . intval($b);
+            $colorQueryString = ""; if (!empty($color)) foreach ($color as $c) $colorQueryString .= "&color[]=" . $c;
+        ?>
+
+        <?php if ($page > 1): ?>
+            <li>
+                <a href="?page=<?= $page - 1 ?>&sort=<?= $sort ?>&search=<?= $search ?>&category=<?= $category ?><?= $brandQueryString ?><?= $sizeQueryString ?>&min_price=<?= $minPrice ?>&max_price=<?= $maxPrice ?><?= $colorQueryString ?>">Prev</a>
+            </li>
+        <?php endif; ?>
+
+        <?php for ($i = 1; $i <= $pages; $i++): ?>
+            <li>
+                <a href="?page=<?= $i ?>&sort=<?= $sort ?>&search=<?= $search ?>&category=<?= $category ?><?= $brandQueryString ?><?= $sizeQueryString ?>&min_price=<?= $minPrice ?>&max_price=<?= $maxPrice ?><?= $colorQueryString ?>" class="<?= ($i == $page) ? 'active' : '' ?>">
+                    <?= $i ?>
+                </a>
+            </li>
+        <?php endfor; ?>
+
+        <?php if ($page < $pages): ?>
+            <li>
+                <a href="?page=<?= $page + 1 ?>&sort=<?= $sort ?>&search=<?= $search ?>&category=<?= $category ?><?= $brandQueryString ?><?= $sizeQueryString ?>&min_price=<?= $minPrice ?>&max_price=<?= $maxPrice ?><?= $colorQueryString ?>">Next</a>
+            </li>
+        <?php endif; ?>
+    </ul>
+</div>
+
+
+
+
+
+
+            </ul>
+        </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+        <!-- footer -->
+<div class="footer">
+    <div class="footer-inbox1">
+
+        <!-- Column 1: Logo + Social + About -->
+        <div class="footer-inbox-dbox1">
+            <div class="footer-social">
+                <i class="fa-brands fa-instagram"></i>
+                <i class="fa-brands fa-facebook-f"></i>
+                <i class="fa-brands fa-x-twitter"></i>
+            </div>
+
+            <h4>EISER <span id="dot"></span></h4>
+            <p>The customer is at the heart of our unique business model, which includes design.</p>
+            
+            <div class="card-img-box">
+                <img src="images/payment.png" alt="Payment Methods">
+            </div>
+        </div>
+
+        <!-- Column 2: Shopping Links -->
+        <div class="footer-inbox-dbox1">
+            <h3>Shopping</h3>
+            <p>Clothing Store</p>
+            <p>Men's Fashion</p>
+            <p>Accessories</p>
+            <p>Sale</p>
+        </div>
+
+        <!-- Column 3: Top Products -->
+        <div class="footer-inbox-dbox1">
+            <h3>Top Products</h3>
+            <p>Managed Website</p>
+            <p>Power Tools</p>
+            <p>Marketing Service</p>
+            <p>Best Deals</p>
+        </div>
+
+        <!-- Column 4: Newsletter -->
+        <div class="footer-inbox-dbox1">
+            <h3>NEWSLETTER</h3>
+            <p>Be the first to know about new arrivals, look books, sales & promos!</p>
+            <div class="newsletter-box">
+                <input type="email" placeholder="Your email">
+                <i class="fa-solid fa-envelope"></i>
+            </div>
+        </div>
+
+    </div>
+
+    <p id="copyright">© 2025 EISER — All Rights Reserved</p>
+</div>
+<!-- footer -->
+    <!-- main -->
+    </div>
+    <!-- main -->
+     <script>
+document.querySelectorAll('.dropdown-header').forEach(header => {
+    header.addEventListener('click', () => {
+        const parent = header.parentElement;
+        parent.classList.toggle('active');
+    });
+});
+</script>
+
+</body>
+</html>

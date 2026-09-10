@@ -1,0 +1,5 @@
+correct way make dashboard:-
+1. create a layout using html and css and specify needs with comments in it
+2. give code to ai 
+3. after that change should be given in points for better usage i guess
+4. make responsive

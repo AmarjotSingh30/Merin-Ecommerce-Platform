@@ -1,0 +1,64 @@
+/* -------- RESPONSIVE -------- */
+@media (max-width: 768px) {
+
+    .nav-links {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        width: 100%;
+        background: white;
+        display: none;
+        text-align: center;
+        padding: 20px 0;
+        box-shadow: 0px 10px 20px rgba(0,0,0,0.1);
+    }
+
+    .nav-links ul {
+        flex-direction: column;
+        gap: 20px;
+    }
+    #icon_1{
+        display:none;
+    }
+    .hamburger {
+        display: block;
+    }
+}
+
+/* show menu on click (JS adds .active) */
+.nav-links.active {
+    display: block;
+}
+/* navbar */
+
+/* hero section */
+/* RESPONSIVE */
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-content h1 {
+        font-size: 35px;
+        line-height: 45px;
+    }
+    .hero-slider {
+        height: 65vh;
+    }
+}
+/* hero section */
+
+/* top bar */
+/* ---------------- RESPONSIVE ---------------- */
+@media(max-width: 768px) {
+
+    .top-bar {
+        flex-direction: column;
+        text-align: center;
+        gap: 5px;
+        padding: 10px 0;
+    }
+
+    .top-right {
+        gap: 15px;
+    }
+}
+
+/* top bar */

@@ -1,0 +1,454 @@
+<?php
+// Step 8: Insert New User Into Database (No Hashing Yet)
+$message = "";
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    $name   = $_POST["name"];
+    $email  = $_POST["email"];
+    $pass   = $_POST["password"];
+    $cpass  = $_POST["confirm_password"];
+
+    // 1) Password match
+    if ($pass !== $cpass) {
+        $message = "❌ Passwords do not match!";
+    }
+    // 2) Email format
+    else if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "❌ Invalid Email Format!";
+    }
+    // 3) Password length
+    else if (strlen($pass) < 8) {
+        $message = "❌ Password must be at least 8 characters!";
+    }
+    // 4) Contains number
+    else if (!preg_match('/[0-9]/', $pass)) {
+        $message = "❌ Password must contain at least one number!";
+    }
+    // 5) Contains letter
+    else if (!preg_match('/[A-Za-z]/', $pass)) {
+        $message = "❌ Password must contain at least one letter!";
+    }
+    else {
+
+        // connect
+        $conn = mysqli_connect("localhost", "root", "", "auth_system");
+
+        if (!$conn) {
+            die("Database connection failed!");
+        }
+
+        // check email duplicate
+        $checkQuery = "SELECT * FROM users WHERE email='$email'";
+        $result = mysqli_query($conn, $checkQuery);
+
+        if (mysqli_num_rows($result) > 0) {
+            $message = "❌ Email already registered!";
+        }
+        else {
+            // HASH PASSWORD BEFORE INSERTING
+                $hashedPassword = password_hash($pass, PASSWORD_DEFAULT);
+
+                 // 2) Generate a secure random token
+                        $token = bin2hex(random_bytes(16)); // 32-char token
+
+                        // 3) Set verified = 0 (not verified yet)
+                        $verified = 0;
+
+            // INSERT USER (plain password for now)
+            $insertQuery = "INSERT INTO users (name, email, password, verified, token) 
+                VALUES ('$name', '$email', '$hashedPassword', '$verified', '$token')";
+
+
+            if (mysqli_query($conn, $insertQuery)) {
+
+                    // Create verification link
+                    $verifyLink = "http://localhost/6_MONTHS_Training/experiments_for_loginsignup/verify.php?email=$email&token=$token";
+
+                    // Email subject and message
+                    $subject = "Verify Your Email Address";
+                    $body = "Hello $name,\n\nClick the link below to verify your email:\n$verifyLink\n\nThank you!";
+                    $headers = "From: no-reply@yourwebsite.com";
+
+                    // Send mail
+                    if (mail($email, $subject, $body, $headers)) {
+                        $message = "✔ Verification email sent! Please check your inbox.";
+                    } 
+                    else {
+                        $message = "✔ Account created, but email could not be sent.";
+                    }
+
+                } else {
+                    $message = "❌ Error creating account!";
+                }
+
+        mysqli_close($conn);
+    }
+  }
+}
+?>
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Account</title>
+
+    <style>
+        body {
+            background: #f2f2f2;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        .container {
+            width: 350px;
+        }
+
+        .logo {
+            display: block;
+            width: 120px;
+            margin: 0 auto 20px auto;
+        }
+
+        .box {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 25px;
+            border-radius: 8px;
+        }
+
+        h2 {
+            font-size: 25px;
+            margin-bottom: 15px;
+            font-weight: normal;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 3px;
+            border: 1px solid #888;
+            border-radius: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #f3d078;
+            border: 1px solid #a88734;
+            border-radius: 5px;
+            margin-top: 15px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:hover {
+            background: #e2c067;
+        }
+
+        .signin-link {
+            margin-top: 20px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- Replace with your logo -->
+    <img src="images/ml-logo.png" class="logo">
+
+    <div class="box">
+        <h2>Create Account</h2>
+
+        <!-- FORM WILL BE ACTIVATED IN STEP 2 -->
+         <?php if ($message != ""): ?>
+         <p style="background:#fce4e4; padding:10px; border-radius:6px; color:#d8000c;">
+        <?php echo $message; ?>
+    </p>
+<?php endif; ?>
+
+      <form method="POST" action="">
+
+    <label>Your Name</label>
+    <input type="text" name="name" required>
+
+    <label>Email</label>
+    <input type="email" name="email" required>
+
+    <label>Password</label>
+    <input type="password" name="password" required>
+
+    <label>Re-enter Password</label>
+    <input type="password" name="confirm_password" required>
+
+    <button>Create your account</button>
+
+</form>
+
+
+    </div>
+
+    <p class="signin-link">Already have an account? <a href="#">Sign in</a></p>
+
+</div>
+
+</body>
+</html>
+
+
+------/------------------------------/---------------------/--------------------------/----------------------/---------------------------------/------------
+2)
+<?php
+// ----------------------------
+// SIGNUP + EMAIL VERIFICATION
+// ----------------------------
+
+// Include PHPMailer (we will use Composer's autoload)
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+// If you haven't installed PHPMailer yet, do:
+// 1. Open terminal/command prompt in your project folder
+// 2. Run: composer require phpmailer/phpmailer
+
+require 'vendor/autoload.php';
+
+$message = "";
+
+// Check if form submitted
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    // Get user input safely
+    $name   = trim($_POST["name"]);
+    $email  = trim($_POST["email"]);
+    $pass   = $_POST["password"];
+    $cpass  = $_POST["confirm_password"];
+
+    // ----------- VALIDATION -------------
+    if ($pass !== $cpass) {
+        $message = "❌ Passwords do not match!";
+    } else if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "❌ Invalid Email Format!";
+    } else if (strlen($pass) < 8) {
+        $message = "❌ Password must be at least 8 characters!";
+    } else if (!preg_match('/[0-9]/', $pass)) {
+        $message = "❌ Password must contain at least one number!";
+    } else if (!preg_match('/[A-Za-z]/', $pass)) {
+        $message = "❌ Password must contain at least one letter!";
+    } else {
+
+        // ----------- DATABASE CONNECTION -------------
+        $conn = mysqli_connect("localhost", "root", "", "auth_system");
+        if (!$conn) {
+            die("Database connection failed!");
+        }
+
+        // Check duplicate email
+        $checkQuery = "SELECT * FROM users WHERE email='$email'";
+        $result = mysqli_query($conn, $checkQuery);
+
+        if (mysqli_num_rows($result) > 0) {
+            $message = "❌ Email already registered!";
+        } else {
+
+            // ----------- HASH PASSWORD -------------
+            $hashedPassword = password_hash($pass, PASSWORD_DEFAULT);
+
+            // ----------- GENERATE TOKEN -------------
+            $token = bin2hex(random_bytes(16));
+            $verified = 0;
+
+            // ----------- INSERT USER -------------
+            $insertQuery = "INSERT INTO users (name, email, password, verified, token)
+                            VALUES ('$name', '$email', '$hashedPassword', '$verified', '$token')";
+
+            if (mysqli_query($conn, $insertQuery)) {
+
+                // ----------- SEND VERIFICATION EMAIL -------------
+                $mail = new PHPMailer(true);
+
+                try {
+                    // SMTP Settings
+                    $mail->isSMTP();
+                    $mail->Host       = 'sandbox.smtp.mailtrap.io';
+                    $mail->SMTPAuth   = true;
+                    $mail->Username   = 'c8ba9bed5121f4';
+                    $mail->Password   = 'ecb3e546217e8f';
+                    $mail->Port       = 2525; // use 587 if 2525 blocked
+
+                    $mail->setFrom('no-reply@yourwebsite.com', 'Your Website');
+                    $mail->addAddress($email, $name);
+
+                    $mail->isHTML(true);
+                    $mail->Subject = 'Verify Your Email Address';
+
+                    // Verification link
+                    $verifyLink = "http://localhost/6_MONTHS_Training/experiments_for_loginsignup/verify.php?email=$email&token=$token";
+                    $mailContent = "
+                        <h3>Hello $name</h3>
+                        <p>Click the link below to verify your email:</p>
+                        <a href='$verifyLink'>$verifyLink</a>
+                        <p>Thank you!</p>
+                    ";
+                    $mail->Body = $mailContent;
+
+                    $mail->send();
+                    $message = "✔ Verification email sent! Check Mailtrap Inbox.";
+                } catch (Exception $e) {
+                    $message = "❌ Could not send email. Mailer Error: {$mail->ErrorInfo}";
+                }
+
+            } else {
+                $message = "❌ Error creating account!";
+            }
+        }
+
+        mysqli_close($conn);
+    }
+}
+?>
+
+<!-- ----------------- HTML FORM ----------------- -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Signup</title>
+    <style>
+        /* General Page Styles */
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* Card container */
+        .signup-card {
+            background: #fff;
+            padding: 30px 40px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            width: 400px;
+            text-align: center;
+        }
+
+        /* Logo */
+        .signup-card img {
+            width: 120px;
+            margin-bottom: 20px;
+        }
+
+        /* Form inputs */
+        .signup-card input {
+            width: 100%;
+            padding: 12px 15px;
+            margin: 8px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 15px;
+        }
+
+        /* Submit button */
+        .signup-card button {
+            width: 100%;
+            padding: 12px;
+            background-color: #6c7ae0; /* Primary color */
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .signup-card button:hover {
+            background-color: #5560c1;
+        }
+
+        /* Messages */
+        .message {
+            margin: 15px 0;
+            padding: 12px;
+            border-radius: 5px;
+            font-weight: bold;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {opacity: 0;}
+            to {opacity: 1;}
+        }
+
+
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Small text */
+        .signup-card small {
+            display: block;
+            margin-top: 15px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+<div class="signup-card">
+    <!-- Replace the src with your own logo -->
+    <img src="images/ml-logo.png" alt="Website Logo">
+
+    <!-- PHP messages -->
+    <?php if(!empty($message)): ?>
+        <div class="message <?php echo strpos($message,'✔') !== false ? 'success':'error'; ?>">
+            <?php echo $message; ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Signup Form -->
+    <form action="" method="POST">
+        <input type="text" name="name" placeholder="Enter Name" required>
+        <input type="email" name="email" placeholder="Enter Email" required>
+        <input type="password" name="password" placeholder="Enter Password" required>
+        <input type="password" name="confirm_password" placeholder="Confirm Password" required>
+        <button type="submit">Signup</button>
+    </form>
+
+    <small>Already have an account? <a href="login.php">Login here</a></small>
+</div>
+
+</body>
+</html>
+

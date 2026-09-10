@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <div class="container">
+
+      <!-- side bar start -->
+      <div class="sidebar">
+        <!-- 1st box -->
+        <div class="sidebar-1stbox">
+          <h1>logo</h1>
+        </div>
+        <!-- 1st box -->
+
+        <!-- 2nd box -->
+        <div class="sidebar-2ndbox">
+
+          <div class="circle-background-profile">
+            <!-- add img here -->
+          </div>
+
+          <div class="sidebar-2ndbox-text-box">
+            <h1>jerry</h1>
+            <p>admin</p>
+          </div>
+
+          <div class="sidebar-2ndbox-option-box">
+            <!-- add 3 dots with 2 options :- 1. profile management 2. logout-->
+          </div>
+        </div>
+        <!-- 2nd box -->
+
+        <!-- 3rd box -->
+        <div class="sidebar-3rdbox">
+          <h1>navigation</h1>
+        </div>
+        <!-- 3rd box -->
+
+        <!-- 4th box -->
+        <div class="sidebar-4thbox">
+
+          <div class="round-border-icons">
+            <i class="fa-solid fa-chart-line"></i>
+          </div>
+
+          <div class="sidebar-4thbox-textbox">
+             <a href="#">dashboard</a>
+          </div>
+
+        </div>
+        <!-- 4th box -->
+
+        <!-- 5th box -->
+        <div class="sidebar-4thbox">
+
+          <div class="round-border-icons">
+            <i class="fa-solid fa-shop"></i>
+          </div>
+
+          <div class="sidebar-4thbox-textbox">
+             <a href="#">view vendors</a>
+          </div>
+
+        </div>
+        <!-- 5th box -->
+
+        <!-- 6th box -->
+        <div class="sidebar-4thbox">
+
+          <div class="round-border-icons">
+            <i class="fa-solid fa-user"></i>
+          </div>
+
+          <div class="sidebar-4thbox-textbox">
+             <a href="#">view users</a>
+          </div>
+
+        </div>
+        <!-- 6th box -->
+
+        <!-- 7th box -->
+        <div class="sidebar-4thbox">
+
+          <div class="round-border-icons">
+            <i class="fa-solid fa-user"></i>
+          </div>
+
+          <div class="sidebar-4thbox-textbox">
+             <a href="#">add products</a>
+          </div>
+          
+
+        </div>
+        <!-- 7th box -->
+
+        <!-- 8th box -->
+        <div class="sidebar-4thbox">
+
+          <div class="round-border-icons">
+            <i class="fa-solid fa-user"></i>
+          </div>
+
+          <div class="sidebar-4thbox-textbox">
+             <a href="#">view products</a>
+          </div>
+
+        </div>
+        <!-- 8th box -->
+
+        <!-- 9th box -->
+        <div class="sidebar-4thbox">
+
+          <div class="round-border-icons">
+            <i class="fa-solid fa-user"></i>
+          </div>
+
+          <div class="sidebar-4thbox-textbox">
+             <a href="#">view orders</a>
+          </div>
+
+        </div>
+        <!-- 9th box -->
+
+
+
+      </div>
+      <!-- side bar end -->
+
+       <!-- right-section -->
+      <div class="right-section">
+        <!-- top bar -->
+        <div class="right-section-top-bar">
+
+          <div class="right-section-top-bar-1stbox">
+            <!-- here hamburger icon :- that on click make the side bar collapse and in side bar all the content should look while collapse and only circle border icons of all options in side bar will apear -->
+          </div>
+
+          <div class="right-section-top-bar-2ndbox">
+            <!-- here i need search box -->
+          </div>
+
+          <div class="right-section-top-bar-3rdbox">
+            <!-- here i need icon that change whole theme of from light to dark when clecked -->
+          </div>
+
+          <div class="right-section-top-bar-4thbox">
+            <!-- here i need a circle border with img and 2 drop down option 1. profile mangement 2. logout -->
+          </div>
+
+        </div>
+        <!-- top bar -->
+
+        <!-- right-section-content -->
+        <div class="right-section-content">
+
+          <!-- 1st box -->
+          <div class="right-section-content-1stbox">
+
+            <div class="right-section-content-1stbox-inbox1">
+              <!-- here total products -->
+            </div>
+
+            <div class="right-section-content-1stbox-inbox1">
+              <!-- here total orders -->
+            </div>
+
+            <div class="right-section-content-1stbox-inbox1">
+              <!-- here total revenue -->
+            </div>
+
+            <div class="right-section-content-1stbox-inbox1">
+              <!-- here daily expense -->
+            </div>
+
+          </div>
+           <!-- 1st box -->
+
+          <!--2nd box  -->
+          <div class="right-section-content-2ndbox">
+            <!-- here i need order status form -->
+          </div>
+          <!-- 2nd box -->
+
+           <!--3nd box  -->
+          <div class="right-section-content-2ndbox">
+            <!-- here i need 3 boxes in :- 1) mesage box 2) calendar 3) todo list(fully working using js maybe)  -->
+          </div>
+
+          <!-- 3nd box -->
+
+
+           <!--4th box  -->
+          <div class="right-section-content-2ndbox">
+            <!-- here i need visitor by counteries one side showing visiter name other side showing a map  -->
+          </div>
+          
+          <!-- 4th box -->
+
+
+
+        </div>
+        <!-- right-section-content -->
+
+        <!-- right-section-footer -->
+        <div class="right-section-footer"></div>
+         <!-- right-section-footer -->
+
+      </div>
+      <!-- right-section -->
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
+css:-
+*{
+    padding: 0%;
+    margin: 0%;
+    box-sizing: border-box;
+}
+.container{
+    width: 90%;
+    height: 100vh;
+    border: 2px solid red;
+    margin: auto;
+    display: flex;
+}
+/* /////////////--side bar start--////////////// */
+.sidebar{
+    width: 30%;
+    height: 100%;
+    border: 2px solid black;
+}
+.sidebar-1stbox{
+    width: 100%;
+    height: 10%;
+    border: 2px solid yellow;
+}
+.sidebar-2ndbox{
+    width: 100%;
+    height: 10%;
+    border: 2px solid green;
+    display: flex;
+}
+.circle-background-profile{
+    width: 20%;
+    height: 100%;
+    border: 2px solid red;
+    border-radius: 100%;
+}
+.sidebar-2ndbox-text-box{
+    width: 70%;
+    height: 100%;
+    border: 2PX SOLID PURPLE;
+}
+.sidebar-2ndbox-option-box{
+    width: 10%;
+    height: 100%;
+    border: 2px solid green;
+}
+.sidebar-3rdbox{
+    width: 100%;
+    height: 10%;
+    border: 2px solid red;
+}
+
+.sidebar-4thbox{
+    width: 100%;
+    height: 10%;
+    border: 2px solid purple;
+    display: flex;
+}
+.round-border-icons{
+    width: 20%;
+    height: 100%;
+    border: 2px solid black;
+    border-radius: 100%;
+    text-align: center;
+    align-content: center;
+    color: red;
+}
+.sidebar-4thbox-textbox{
+    width:80%;
+    height: 100%;
+    border: 2px solid purple;
+}
+/* /////////////--side bar end--////////////// */
+
+/* /////////////--right-section--////////////// */
+.right-section{
+    width: 100%;
+    height: 100%;
+    border: 2px solid purple;
+}
+/* top bar */
+.right-section-top-bar{
+    width: 100%;
+    height: 10%;
+    border: 2px solid black;
+    display: flex;
+}
+.right-section-top-bar-1stbox{
+    width: 10%;
+    height: 100%;
+    border: 2px solid black;
+}
+.right-section-top-bar-2ndbox{
+    width: 20%;
+    height: 100%;
+    border: 2px solid green;
+}
+
+.right-section-top-bar-3rdbox{
+    width: 20%;
+    height: 100%;
+    border: 2px solid red;
+}
+
+.right-section-top-bar-4thbox{
+    width: 20%;
+    height: 100%;
+    border: 2px solid yellow;
+}
+/* top bar */
+
+/* right-section-content */
+.right-section-content{
+    width: 100%;
+    height: 80%;
+    border: 2px solid yellow;
+}
+.right-section-content-1stbox{
+    width: 100%;
+    height: 20%;
+    border: 2px solid green;
+    display: flex;
+}
+.right-section-content-1stbox-inbox1{
+    width: 10%;
+    height: 100%;
+    border: 2px solid red;
+}
+/* right section content ends */
+.right-section-footer{
+    width: 100%;
+    height: 10%;
+    border: 2px solid aqua;
+}
+
+.right-section-content-2ndbox{
+    width: 100%;
+    height: 20%;
+    border: 2px solid aqua;
+    display: flex;
+}
+
+/* /////////////--right-section end--////////////// */
